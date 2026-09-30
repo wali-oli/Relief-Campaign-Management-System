@@ -1,0 +1,767 @@
+-- =====================================================
+-- RELIEF CAMPAIGN DATABASE (Oracle)
+-- Run this whole file in SQL*Plus:  @campaign_oracle_extended.sql
+-- =====================================================
+
+
+-- =====================================================
+-- STEP 0: Make the output look neat (only for SQL*Plus)
+-- =====================================================
+
+SET LINESIZE 1000
+SET PAGESIZE 1000
+SET SERVEROUTPUT ON
+ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD';
+
+-- =====================================================
+-- STEP 1: Create the tables
+-- (VARCHAR2 is Oracle's version of VARCHAR)
+-- (CHECK (...) allows only the listed values)
+-- =====================================================
+
+CREATE TABLE Location (
+    location_id   CHAR(20) PRIMARY KEY,
+    location_name VARCHAR2(100) NOT NULL,
+    address       VARCHAR2(255) NOT NULL,
+    district      VARCHAR2(100),
+    division      VARCHAR2(100)
+);
+
+CREATE TABLE Campaign (
+    campaign_id   CHAR(20) PRIMARY KEY,
+    campaign_date DATE NOT NULL,
+    description   VARCHAR2(500),
+    start_date    DATE NOT NULL,
+    end_date      DATE,
+    status        VARCHAR2(20) DEFAULT 'Planned'
+                  CHECK (status IN ('Planned','Ongoing','Completed','Cancelled')),
+    location_id   CHAR(20),
+    FOREIGN KEY (location_id) REFERENCES Location(location_id)
+);
+
+CREATE TABLE Volunteer (
+    volunteer_id        CHAR(20) PRIMARY KEY,
+    volunteer_name      VARCHAR2(100) NOT NULL,
+    phone               VARCHAR2(15),
+    email               VARCHAR2(100),
+    role                VARCHAR2(100),
+    availability_status VARCHAR2(20) DEFAULT 'Available'
+                        CHECK (availability_status IN ('Available','Busy','Unavailable'))
+);
+
+CREATE TABLE Donor (
+    donor_id   CHAR(20) PRIMARY KEY,
+    donor_name VARCHAR2(100) NOT NULL,
+    phone      VARCHAR2(15),
+    email      VARCHAR2(100),
+    address    VARCHAR2(255)
+);
+
+CREATE TABLE Donation (
+    donation_id   CHAR(25) PRIMARY KEY,
+    donor_id      CHAR(20) NOT NULL,
+    campaign_id   CHAR(20),
+    donation_type VARCHAR2(10) DEFAULT 'Other'
+                  CHECK (donation_type IN ('Cash','Item','Food','Other')),
+    donation_date DATE NOT NULL,
+    FOREIGN KEY (donor_id)    REFERENCES Donor(donor_id),
+    FOREIGN KEY (campaign_id) REFERENCES Campaign(campaign_id)
+);
+
+CREATE TABLE Campaign_Volunteer (
+    campaign_id   CHAR(20) NOT NULL,
+    volunteer_id  CHAR(20) NOT NULL,
+    assigned_role VARCHAR2(100),
+    assigned_date DATE,
+    PRIMARY KEY (campaign_id, volunteer_id),
+    FOREIGN KEY (campaign_id)  REFERENCES Campaign(campaign_id),
+    FOREIGN KEY (volunteer_id) REFERENCES Volunteer(volunteer_id)
+);
+
+CREATE TABLE Items (
+    item_id     CHAR(20) PRIMARY KEY,
+    donation_id CHAR(25) NOT NULL,
+    item_name   VARCHAR2(150) NOT NULL,
+    category    VARCHAR2(100),
+    quantity    NUMBER(10) DEFAULT 1 NOT NULL,
+    unit        VARCHAR2(50),
+    FOREIGN KEY (donation_id) REFERENCES Donation(donation_id)
+);
+
+-- =====================================================
+-- STEP 2: ALTER TABLE operations (ADD, MODIFY, RENAME, DROP a column)
+-- =====================================================
+
+ALTER TABLE Donor ADD donor_type VARCHAR2(20);
+ALTER TABLE Donor MODIFY donor_type VARCHAR2(50);
+ALTER TABLE Donor RENAME COLUMN donor_type TO donor_category;
+ALTER TABLE Donor DROP COLUMN donor_category;
+
+-- =====================================================
+-- STEP 3: Automatic IDs (sequence = counter, trigger sets the ID before INSERT)
+-- =====================================================
+
+CREATE SEQUENCE seq_location START WITH 1;
+CREATE SEQUENCE seq_campaign START WITH 1;
+CREATE SEQUENCE seq_volunteer START WITH 1;
+CREATE SEQUENCE seq_donor START WITH 1;
+CREATE SEQUENCE seq_donation START WITH 1;
+CREATE SEQUENCE seq_items START WITH 1;
+
+CREATE OR REPLACE TRIGGER trg_location_id
+BEFORE INSERT ON Location FOR EACH ROW
+BEGIN
+    :NEW.location_id := 'L' || LPAD(seq_location.NEXTVAL, 3, '0');
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_campaign_id
+BEFORE INSERT ON Campaign FOR EACH ROW
+BEGIN
+    :NEW.campaign_id := 'C' || LPAD(seq_campaign.NEXTVAL, 3, '0');
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_volunteer_id
+BEFORE INSERT ON Volunteer FOR EACH ROW
+BEGIN
+    :NEW.volunteer_id := 'V' || LPAD(seq_volunteer.NEXTVAL, 3, '0');
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_donor_id
+BEFORE INSERT ON Donor FOR EACH ROW
+BEGIN
+    :NEW.donor_id := 'D' || LPAD(seq_donor.NEXTVAL, 3, '0');
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_donation_id
+BEFORE INSERT ON Donation FOR EACH ROW
+BEGIN
+    :NEW.donation_id := 'DN' || LPAD(seq_donation.NEXTVAL, 3, '0');
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_items_id
+BEFORE INSERT ON Items FOR EACH ROW
+BEGIN
+    :NEW.item_id := 'I' || LPAD(seq_items.NEXTVAL, 3, '0');
+END;
+/
+
+-- =====================================================
+-- STEP 4: Insert data (one row per INSERT; IDs are generated by the triggers)
+-- =====================================================
+
+-- ---------- Location (L001 - L005) ----------
+INSERT INTO Location (location_name, address, district, division)
+VALUES ('Dhaka City Hall', '14/2 Nilkhet', 'Dhaka', 'Dhaka');
+
+INSERT INTO Location (location_name, address, district, division)
+VALUES ('Chittagong Center', '45 Agrabad', 'Chittagong', 'Chattogram');
+
+INSERT INTO Location (location_name, address, district, division)
+VALUES ('Sylhet Relief Hub', '12 Zindabazar', 'Sylhet', 'Sylhet');
+
+INSERT INTO Location (location_name, address, district, division)
+VALUES ('Khulna Community Hall', '8 Sonadanga', 'Khulna', 'Khulna');
+
+INSERT INTO Location (location_name, address, district, division)
+VALUES ('Rajshahi Town Hall', '22 Shaheb Bazar', 'Rajshahi', 'Rajshahi');
+
+-- ---------- Campaign (C001 - C006) ----------
+INSERT INTO Campaign (campaign_date, description, start_date, end_date, status, location_id)
+VALUES (DATE '2026-08-05', 'Eid Relief Distribution',
+        DATE '2026-08-01', DATE '2026-08-10', 'Ongoing', 'L001');
+
+INSERT INTO Campaign (campaign_date, description, start_date, end_date, status, location_id)
+VALUES (DATE '2026-06-15', 'Flood Relief Support',
+        DATE '2026-06-10', DATE '2026-06-25', 'Completed', 'L003');
+
+INSERT INTO Campaign (campaign_date, description, start_date, end_date, status, location_id)
+VALUES (DATE '2026-07-10', 'Food Packet Distribution',
+        DATE '2026-07-05', DATE '2026-07-15', 'Completed', 'L002');
+
+INSERT INTO Campaign (campaign_date, description, start_date, end_date, status, location_id)
+VALUES (DATE '2026-09-20', 'Winter Clothes Collection',
+        DATE '2026-09-15', DATE '2026-09-30', 'Planned', 'L004');
+
+INSERT INTO Campaign (campaign_date, description, start_date, end_date, status, location_id)
+VALUES (DATE '2026-05-12', 'Medical Aid Camp',
+        DATE '2026-05-10', DATE '2026-05-14', 'Cancelled', 'L005');
+
+INSERT INTO Campaign (campaign_date, description, start_date, end_date, status, location_id)
+VALUES (DATE '2026-10-01', 'School Kit Distribution',
+        DATE '2026-10-01', DATE '2026-10-15', 'Planned', 'L001');
+
+-- ---------- Volunteer (V001 - V006) ----------
+INSERT INTO Volunteer (volunteer_name, phone, email, role, availability_status)
+VALUES ('Rahim Uddin', '01711111111', 'rahim@mail.com', 'Coordinator', 'Available');
+
+INSERT INTO Volunteer (volunteer_name, phone, email, role, availability_status)
+VALUES ('Nusrat Jahan', '01733333333', 'nusrat@mail.com', 'Manager', 'Busy');
+
+INSERT INTO Volunteer (volunteer_name, phone, email, role, availability_status)
+VALUES ('Tanvir Ahmed', '01744444444', 'tanvir@mail.com', 'Driver', 'Available');
+
+INSERT INTO Volunteer (volunteer_name, phone, email, role, availability_status)
+VALUES ('Sadia Islam', '01755555555', 'sadia@mail.com', 'Medical Officer', 'Unavailable');
+
+INSERT INTO Volunteer (volunteer_name, phone, email, role, availability_status)
+VALUES ('Ayesha Siddika', '01799999999', 'ayesha.s@mail.com', 'Distributor', 'Available');
+
+INSERT INTO Volunteer (volunteer_name, phone, email, role, availability_status)
+VALUES ('Rafiq Hasan', '01766666666', 'rafiq@mail.com', 'Coordinator', 'Available');
+
+-- ---------- Donor (D001 - D006) ----------
+INSERT INTO Donor (donor_name, phone, email, address)
+VALUES ('Karim Foundation', '01822222222', 'karim@mail.com', 'Gulshan-1, Dhaka');
+
+INSERT INTO Donor (donor_name, phone, email, address)
+VALUES ('Ayesha Siddika', '01866666666', 'ayesha@mail.com', 'Agrabad, Chittagong');
+
+INSERT INTO Donor (donor_name, phone, email, address)
+VALUES ('Hasan Traders', '01877777777', 'hasan@mail.com', 'Zindabazar, Sylhet');
+
+INSERT INTO Donor (donor_name, phone, email, address)
+VALUES ('Green Future Ltd', '01888888888', 'green@mail.com', 'Sonadanga, Khulna');
+
+INSERT INTO Donor (donor_name, phone, email, address)
+VALUES ('Md. Farhan', '01899999999', 'farhan@mail.com', 'Shaheb Bazar, Rajshahi');
+
+INSERT INTO Donor (donor_name, phone, email, address)
+VALUES ('Sabina Yasmin', '01911111111', 'sabina@mail.com', 'Mirpur, Dhaka');
+
+-- ---------- Donation (DN001 - DN009) ----------
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D001', 'C001', 'Cash', DATE '2026-08-03');
+
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D002', 'C001', 'Food', DATE '2026-08-02');
+
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D003', 'C002', 'Item', DATE '2026-06-12');
+
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D001', 'C002', 'Cash', DATE '2026-06-14');
+
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D004', 'C003', 'Food', DATE '2026-07-08');
+
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D005', 'C003', 'Cash', DATE '2026-07-12');
+
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D002', 'C004', 'Item', DATE '2026-09-16');
+
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D004', 'C005', 'Cash', DATE '2026-05-11');
+
+INSERT INTO Donation (donor_id, campaign_id, donation_type, donation_date)
+VALUES ('D003', 'C001', 'Item', DATE '2026-08-04');
+
+-- ---------- Campaign_Volunteer ----------
+INSERT INTO Campaign_Volunteer (campaign_id, volunteer_id, assigned_role, assigned_date)
+VALUES ('C001', 'V001', 'Distribution Lead', DATE '2026-08-04');
+
+INSERT INTO Campaign_Volunteer (campaign_id, volunteer_id, assigned_role, assigned_date)
+VALUES ('C001', 'V003', 'Transport In-charge', DATE '2026-08-04');
+
+INSERT INTO Campaign_Volunteer (campaign_id, volunteer_id, assigned_role, assigned_date)
+VALUES ('C002', 'V002', 'Team Manager', DATE '2026-06-09');
+
+INSERT INTO Campaign_Volunteer (campaign_id, volunteer_id, assigned_role, assigned_date)
+VALUES ('C002', 'V004', 'Medical Support', DATE '2026-06-09');
+
+INSERT INTO Campaign_Volunteer (campaign_id, volunteer_id, assigned_role, assigned_date)
+VALUES ('C003', 'V001', 'Distribution Lead', DATE '2026-07-04');
+
+INSERT INTO Campaign_Volunteer (campaign_id, volunteer_id, assigned_role, assigned_date)
+VALUES ('C003', 'V005', 'Packing Volunteer', DATE '2026-07-04');
+
+INSERT INTO Campaign_Volunteer (campaign_id, volunteer_id, assigned_role, assigned_date)
+VALUES ('C004', 'V006', 'Coordinator', DATE '2026-09-14');
+
+-- ---------- Items (I001 - I009) ----------
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN001', 'Rice', 'Food', 50, 'kg');
+
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN002', 'Lentils', 'Food', 30, 'kg');
+
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN002', 'Flour', 'Food', 20, 'kg');
+
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN003', 'Blanket', 'Cloth', 100, 'pcs');
+
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN003', 'Tarpaulin', 'Shelter', 40, 'pcs');
+
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN005', 'Rice', 'Food', 80, 'kg');
+
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN005', 'Sugar', 'Food', 40, 'kg');
+
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN007', 'Winter Jacket', 'Cloth', 60, 'pcs');
+
+INSERT INTO Items (donation_id, item_name, category, quantity, unit)
+VALUES ('DN009', 'Medical Kit', 'Medicine', 15, 'box');
+
+COMMIT;
+
+-- =====================================================
+-- STEP 5: Show all the data
+-- =====================================================
+
+SELECT * FROM Location;
+
+SELECT * FROM Campaign;
+
+SELECT * FROM Volunteer;
+
+SELECT * FROM Donor;
+
+SELECT * FROM Donation;
+
+SELECT * FROM Campaign_Volunteer;
+
+SELECT * FROM Items;
+
+
+-- =====================================================
+-- STEP 6: Queries
+-- =====================================================
+
+-- 9.1 Nested Query using WHERE and IN
+-- Scenario: Find the donors who have made at least one cash donation.
+SELECT donor_name
+FROM Donor
+WHERE donor_id IN
+(
+    SELECT donor_id
+    FROM Donation
+    WHERE donation_type = 'Cash'
+);
+
+-- 9.2 Locations of Completed Campaigns
+-- Scenario: Find the locations where a relief campaign has already been completed.
+SELECT location_name
+FROM Location
+WHERE location_id IN
+(
+    SELECT location_id
+    FROM Campaign
+    WHERE status = 'Completed'
+);
+
+-- 9.3 Update Data
+-- Scenario: The Winter Clothes Collection campaign (C004) has started, so its status is changed from Planned to Ongoing.
+UPDATE Campaign
+SET status = 'Ongoing'
+WHERE campaign_id = 'C004';
+
+COMMIT;
+
+-- 9.4 WITH Clause & SUM
+-- Scenario: Calculate the total quantity of goods received in each donation.
+WITH ItemSummary AS
+(
+    SELECT donation_id, SUM(quantity) Total_Quantity
+    FROM Items
+    GROUP BY donation_id
+)
+SELECT * FROM ItemSummary
+ORDER BY donation_id;
+
+-- 9.5 WITH Clause & COUNT
+-- Scenario: Count how many donations each campaign has received.
+WITH DonationSummary AS
+(
+    SELECT campaign_id, COUNT(*) Total_Donations
+    FROM Donation
+    GROUP BY campaign_id
+)
+SELECT * FROM DonationSummary
+ORDER BY campaign_id;
+
+-- 9.6 GROUP BY & COUNT
+-- Scenario: Count the number of donations of each donation type.
+SELECT donation_type, COUNT(*) Total_Donations
+FROM Donation
+GROUP BY donation_type
+ORDER BY donation_type;
+
+-- 9.7 Two-level Nested Query: Latest Donation
+-- Scenario: Find the donor who made the most recent donation.
+SELECT *
+FROM Donor
+WHERE donor_id =
+(
+    SELECT donor_id
+    FROM Donation
+    WHERE donation_date =
+    (
+        SELECT MAX(donation_date)
+        FROM Donation
+    )
+);
+
+-- 9.8 Two-level Nested Query: Latest Campaign Location
+-- Scenario: Find the location of the campaign that starts last.
+SELECT *
+FROM Location
+WHERE location_id =
+(
+    SELECT location_id
+    FROM Campaign
+    WHERE start_date =
+    (
+        SELECT MAX(start_date)
+        FROM Campaign
+    )
+);
+
+-- 9.9 LIKE with %
+-- Scenario: Find all volunteers whose name starts with the letter R.
+SELECT *
+FROM Volunteer
+WHERE volunteer_name LIKE 'R%';
+
+-- 9.10 LIKE with _
+-- Scenario: Find donors whose name has 'a' as the second letter.
+SELECT donor_name, address
+FROM Donor
+WHERE donor_name LIKE '_a%';
+
+-- 9.11 AND (using a View)
+-- Scenario: Create a view of available volunteers, then find the available coordinator whose phone number starts with 0171.
+CREATE OR REPLACE VIEW Available_Volunteer AS
+SELECT * FROM Volunteer
+WHERE availability_status = 'Available';
+
+SELECT *
+FROM Available_Volunteer
+WHERE role = 'Coordinator'
+AND phone LIKE '0171%';
+
+-- 9.12 OR (using the View)
+-- Scenario: Find available volunteers who are either coordinators or drivers.
+SELECT *
+FROM Available_Volunteer
+WHERE role = 'Coordinator'
+OR role = 'Driver';
+
+-- 9.13 NOT (using the View)
+-- Scenario: Find available volunteers who are not coordinators.
+SELECT *
+FROM Available_Volunteer
+WHERE NOT role = 'Coordinator';
+
+-- 9.14 SOME
+-- Scenario: Find items whose quantity is greater than at least one Cloth item quantity.
+SELECT item_id, item_name, category, quantity
+FROM Items
+WHERE quantity > SOME
+(
+    SELECT quantity
+    FROM Items
+    WHERE category = 'Cloth'
+);
+
+-- 9.15 ALL
+-- Scenario: Find the item with the largest quantity (greater than or equal to every quantity).
+SELECT item_id, item_name, category, quantity
+FROM Items
+WHERE quantity >= ALL
+(
+    SELECT quantity
+    FROM Items
+);
+
+-- 9.16 EXISTS
+-- Scenario: Find donors who have made at least one donation.
+SELECT donor_name
+FROM Donor d
+WHERE EXISTS
+(
+    SELECT *
+    FROM Donation dn
+    WHERE d.donor_id = dn.donor_id
+);
+
+-- 9.17 OR with LIKE
+-- Scenario: List donors who live in Dhaka or Chittagong.
+SELECT donor_name, address
+FROM Donor
+WHERE address LIKE '%Dhaka%' OR address LIKE '%Chittagong%';
+
+-- 9.18 AND, OR and BETWEEN Together
+-- Scenario: Find cash donations made in July 2026 or donations that belong to campaign C001.
+SELECT donation_id, donation_type, donation_date
+FROM Donation
+WHERE donation_type = 'Cash'
+  AND (donation_date BETWEEN DATE '2026-07-01' AND DATE '2026-07-31'
+       OR campaign_id = 'C001');
+
+-- 9.19 UNION
+-- Scenario: List every person's name, whether the person is a donor or a volunteer (duplicates removed).
+SELECT donor_name AS person_name FROM Donor
+UNION
+SELECT volunteer_name FROM Volunteer;
+
+-- 9.20 INTERSECT
+-- Scenario: Find people who are both donors and volunteers.
+SELECT donor_name FROM Donor
+INTERSECT
+SELECT volunteer_name FROM Volunteer;
+
+-- 9.21 MINUS
+-- Scenario: Find donors who are not volunteers.
+SELECT donor_name FROM Donor
+MINUS
+SELECT volunteer_name FROM Volunteer;
+
+-- 9.22 NOT IN
+-- Scenario: List volunteers whose role is not Coordinator or Manager.
+SELECT volunteer_name, role
+FROM Volunteer
+WHERE role NOT IN ('Coordinator', 'Manager');
+
+-- 9.23 NOT EXISTS
+-- Scenario: List campaigns that have not received any donation yet.
+SELECT campaign_id, description
+FROM Campaign c
+WHERE NOT EXISTS (SELECT 1 FROM Donation d WHERE d.campaign_id = c.campaign_id);
+
+-- 9.24 String Concatenation (||)
+-- Scenario: Show the complete address of every location in a single column.
+SELECT location_name, address || ', ' || district || ', ' || division AS full_address
+FROM Location;
+
+-- 9.25 SUBSTR
+-- Scenario: Split each donor ID into its letter prefix and number (TRIM removes the blank padding of CHAR columns).
+SELECT donor_id,
+       SUBSTR(TRIM(donor_id), 1, 1) AS prefix,
+       SUBSTR(TRIM(donor_id), -3) AS id_number
+FROM Donor;
+
+-- 9.26 INNER JOIN
+-- Scenario: Show every donation together with the name of the donor who made it.
+SELECT d.donor_name, dn.donation_id, dn.donation_type
+FROM Donor d
+JOIN Donation dn ON d.donor_id = dn.donor_id;
+
+-- 9.27 LEFT JOIN
+-- Scenario: Show all donors, including donors who have not donated yet.
+SELECT d.donor_name, dn.donation_id
+FROM Donor d
+LEFT JOIN Donation dn ON d.donor_id = dn.donor_id;
+
+-- 9.28 FULL OUTER JOIN
+-- Scenario: Match donors with volunteers by name; unmatched donors and unmatched volunteers are also shown.
+SELECT d.donor_name, v.volunteer_name
+FROM Donor d
+FULL OUTER JOIN Volunteer v ON d.donor_name = v.volunteer_name;
+
+-- 9.29 CROSS JOIN
+-- Scenario: List every possible location for the campaign C006 that is still in the planning stage.
+SELECT c.campaign_id, l.location_name
+FROM Campaign c
+CROSS JOIN Location l
+WHERE c.status = 'Planned' AND c.campaign_id = 'C006';
+
+-- ---------- Extra queries (not in the report) ----------
+
+-- Extra 1: AND with Two Conditions
+-- Scenario: List volunteers who are available and hold the Coordinator role.
+SELECT volunteer_name, role
+FROM Volunteer
+WHERE availability_status = 'Available' AND role = 'Coordinator';
+
+-- Extra 2: NOT with a Condition
+-- Scenario: List all campaigns that are not yet completed.
+SELECT campaign_id, description, status
+FROM Campaign
+WHERE NOT status = 'Completed';
+
+-- Extra 3: UNION ALL
+-- Scenario: Same list as above, but duplicate names are kept.
+SELECT donor_name AS person_name FROM Donor
+UNION ALL
+SELECT volunteer_name FROM Volunteer;
+
+-- Extra 4: JOIN with NOT
+-- Scenario: Data check: find cash donations made before the start date of their campaign (should return no rows).
+SELECT d.donation_id, d.donation_date, c.start_date
+FROM Donation d
+JOIN Campaign c ON d.campaign_id = c.campaign_id
+WHERE d.donation_type = 'Cash' AND NOT d.donation_date >= c.start_date;
+
+-- Extra 5: OR on Category and Quantity
+-- Scenario: List food items or any item with a quantity greater than 10.
+SELECT item_name, category, quantity
+FROM Items
+WHERE category = 'Food' OR quantity > 10;
+
+-- Extra 6: NOT with OR
+-- Scenario: List volunteers who are neither coordinators nor managers.
+SELECT volunteer_name, role
+FROM Volunteer
+WHERE NOT (role = 'Coordinator' OR role = 'Manager');
+
+-- Extra 7: IN
+-- Scenario: List items that belong to the Food or Cloth category.
+SELECT item_name, category, quantity
+FROM Items
+WHERE category IN ('Food', 'Cloth');
+
+-- Extra 8: SOME with Dates
+-- Scenario: Find campaigns that started before at least one donation date.
+SELECT campaign_id, description, start_date
+FROM Campaign
+WHERE start_date < SOME (SELECT donation_date FROM Donation);
+
+-- Extra 9: ALL with Dates
+-- Scenario: Find donations made before the end date of every campaign.
+SELECT donation_id, donation_date
+FROM Donation
+WHERE donation_date < ALL (SELECT end_date FROM Campaign);
+
+-- Extra 10: EXISTS (Campaigns with Donations)
+-- Scenario: List campaigns that have received at least one donation.
+SELECT campaign_id, description
+FROM Campaign c
+WHERE EXISTS (SELECT 1 FROM Donation d WHERE d.campaign_id = c.campaign_id);
+
+-- Extra 11: UPPER and LOWER
+-- Scenario: Show donor names in capital letters and e-mail addresses in small letters.
+SELECT UPPER(donor_name) AS upper_name, LOWER(email) AS lower_email
+FROM Donor;
+
+-- Extra 12: TO_CHAR
+-- Scenario: Extract the year from each donation date.
+SELECT donation_id, TO_CHAR(donation_date, 'YYYY') AS donation_year
+FROM Donation;
+
+-- Extra 13: LENGTH
+-- Scenario: Show the length of each volunteer name in bytes and in characters.
+SELECT volunteer_name,
+       LENGTHB(volunteer_name) AS name_len,
+       LENGTH(volunteer_name) AS chars
+FROM Volunteer;
+
+-- Extra 14: REPLACE
+-- Scenario: Change the word Dhaka to Dhaka City in donor addresses.
+SELECT donor_name, REPLACE(address, 'Dhaka', 'Dhaka City') AS formatted_address
+FROM Donor;
+
+-- Extra 15: RIGHT JOIN
+-- Scenario: Show all campaigns, including campaigns that have received no donation yet.
+SELECT dn.donation_id, c.campaign_id, c.description
+FROM Donation dn
+RIGHT JOIN Campaign c ON dn.campaign_id = c.campaign_id;
+
+
+-- =====================================================
+-- STEP 7: PL/SQL programs
+-- =====================================================
+
+-- 11.1 Display Donor Name by ID
+SET SERVEROUTPUT ON;
+DECLARE
+    v_name Donor.donor_name%TYPE;
+BEGIN
+    SELECT donor_name
+    INTO v_name
+    FROM Donor
+    WHERE donor_id = 'D001';
+
+    DBMS_OUTPUT.PUT_LINE('Donor Name: ' || v_name);
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('Donor not found.');
+END;
+/
+
+-- 11.2 Calculate Total Food Quantity (kg)
+SET SERVEROUTPUT ON;
+DECLARE
+    v_total NUMBER;
+BEGIN
+    SELECT SUM(quantity)
+    INTO v_total
+    FROM Items
+    WHERE unit = 'kg';
+
+    DBMS_OUTPUT.PUT_LINE('Total Quantity Donated (kg): ' || v_total);
+END;
+/
+
+-- 11.3 Check Volunteer Availability
+SET SERVEROUTPUT ON;
+DECLARE
+    v_status Volunteer.availability_status%TYPE;
+BEGIN
+    SELECT availability_status
+    INTO v_status
+    FROM Volunteer
+    WHERE volunteer_id = 'V001';
+
+    IF v_status = 'Available' THEN
+        DBMS_OUTPUT.PUT_LINE('Volunteer is available.');
+    ELSIF v_status = 'Busy' THEN
+        DBMS_OUTPUT.PUT_LINE('Volunteer is busy.');
+    ELSE
+        DBMS_OUTPUT.PUT_LINE('Volunteer is unavailable.');
+    END IF;
+END;
+/
+
+-- 11.4 Cursor to Display Available Volunteers
+SET SERVEROUTPUT ON;
+DECLARE
+    CURSOR c_volunteer IS
+        SELECT volunteer_name, role
+        FROM Volunteer
+        WHERE availability_status = 'Available';
+BEGIN
+    FOR r IN c_volunteer LOOP
+        DBMS_OUTPUT.PUT_LINE(r.volunteer_name || ' - ' || r.role);
+    END LOOP;
+END;
+/
+
+-- 11.5 Procedure to Display Campaign Information
+CREATE OR REPLACE PROCEDURE show_campaign
+(
+    p_campaign_id VARCHAR2
+)
+IS
+    v_desc   Campaign.description%TYPE;
+    v_status Campaign.status%TYPE;
+    v_place  Location.location_name%TYPE;
+BEGIN
+    SELECT c.description, c.status, l.location_name
+    INTO v_desc, v_status, v_place
+    FROM Campaign c
+    JOIN Location l ON c.location_id = l.location_id
+    WHERE TRIM(c.campaign_id) = p_campaign_id;
+
+    DBMS_OUTPUT.PUT_LINE('Campaign: ' || v_desc);
+    DBMS_OUTPUT.PUT_LINE('Status: ' || v_status);
+    DBMS_OUTPUT.PUT_LINE('Location: ' || v_place);
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('Campaign not found.');
+END;
+/
+
+SET SERVEROUTPUT ON;
+BEGIN
+    show_campaign('C001');
+END;
+/
